@@ -1,6 +1,7 @@
-# Changelog
-
-## [0.3.0] - 2026-03-02
+## [0.3.4] - 2026-03-03
+### Added
+- Simplified installation instructions (Ask OpenClaw / CLI) to SKILL.md for better ClawHub visibility.
+- Zero-Secret Logging and Redaction Protocol (v0.3.2/v0.3.3).
 ### Security
 - Removed all API key / credential handling (no curl, no env vars, no non-LLM checks)
 - Phase 2 now exclusively uses `sessions_spawn` — zero credential access
