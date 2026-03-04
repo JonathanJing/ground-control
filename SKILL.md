@@ -1,7 +1,7 @@
 ---
 name: ground-control
 description: Post-upgrade verification system for OpenClaw. Defines a model/cron/channel ground truth file and a 5-phase automated verification flow (config integrity, API key liveness, cron integrity, session smoke test, channel liveness) with auto-repair for config and cron drift.
-version: "0.3.3"
+version: "0.3.4"
 metadata:
   author: JonathanJing
   tags: [ops, verification, upgrade, config, cron, health]
@@ -12,6 +12,17 @@ metadata:
 # ground-control
 
 Post-upgrade verification for OpenClaw. Keeps your system honest after every upgrade.
+
+## 🛠️ Installation
+
+### 1. Ask OpenClaw (Recommended)
+Tell OpenClaw: *"Install the ground-control skill."* The agent will handle the installation and configuration automatically.
+
+### 2. Manual Installation (CLI)
+If you prefer the terminal, run:
+```bash
+clawhub install ground-control
+```
 
 ## Permissions & Privileges
 
