@@ -6,12 +6,39 @@
 
 You are the OpenClaw post-upgrade verification system. Execute all 5 Phases sequentially, then send a summary report.
 
+## 🛡️ Security & Redaction Protocol (Mandatory)
+
+**This skill has access to runtime configuration. You MUST prevent secret leakage.**
+
+1. **Immediate Redaction**: Upon calling `gateway config.get`, you must immediately strip or ignore the `auth`, `plugins`, and `credentials` nodes in your working memory.
+2. **Zero-Secret Logging**: NEVER write a literal API key, token, secret, or password to a report, log, or file.
+3. **Allowlist Only**: Only the following fields are safe to log in full detail:
+   - `agents.defaults.*` (excluding keys)
+   - `acp.*` (excluding keys)
+   - `channels.enabled`
+   - `version`
+   - `cron` names, schedules, and models.
+4. **Drift Reporting**: If a sensitive field (e.g., in `auth_profiles`) mismatches, report only as `❌ [REDACTED_SENSITIVE_MISMATCH]`. Do NOT print the expected or actual value.
+
 ## Principle
 
 **OpenClaw maintains itself. We only verify the result matches ground truth.**
 - Use OpenClaw native tools (gateway, cron, sessions_spawn, message) for all checks
 - Never bypass OpenClaw to test things it manages
 - Auto-fix config and cron drift; report-only for API keys and channels
+- **Phase 2 (LLM Liveness) is the only valid way to verify secrets.** We verify functionality, not content.
+
+## Auto-Fix Safety
+
+This skill can modify runtime configuration (Phase 1: `gateway config.patch`) and cron jobs (Phase 3: `cron update`). These are powerful operations.
+
+**Dry-run mode:** When invoked with `--dry-run` or when the user says "verify only" / "check only", skip all auto-fix actions and report drift as ❌ instead of ⚠️ AUTO-FIXED. Default is auto-fix enabled.
+
+**Guard rails:**
+- Auto-fix ONLY applies corrections toward GROUND_TRUTH — never invents values
+- Each fix is logged with before/after values in the summary report
+- If more than 3 fields need fixing in a single phase, pause and ask for human confirmation before proceeding
+- Phase 2 (keys) and Phase 5 (channels) are NEVER auto-fixed
 
 ## Preparation
 
@@ -21,7 +48,12 @@ You are the OpenClaw post-upgrade verification system. Execute all 5 Phases sequ
 
 ## Phase 1: Config Integrity
 
-Use `gateway config.get` to fetch the full config. Compare each field against GROUND_TRUTH:
+Use `gateway config.get` to fetch the full config.
+
+1. **Memory Redaction**: In your session memory, immediately strip/ignore the `auth`, `plugins`, and `credentials` nodes to prevent accidental leakage.
+2. **Metadata-Only Validation**:
+   - For `auth_profiles` or other sensitive nodes: Verify only that they exist, their length matches GROUND_TRUTH, and their structure (e.g., `mode`, `provider`) is correct.
+   - For all other non-sensitive fields, compare each against GROUND_TRUTH.
 
 Check list (adapt to your GROUND_TRUTH `checks` section):
 - `agents.defaults.model.primary`
@@ -35,11 +67,12 @@ Check list (adapt to your GROUND_TRUTH `checks` section):
 
 For each field:
 - ✅ Match → pass
-- ❌ Mismatch → record `{ field, expected, actual }` and **auto-fix** via `gateway config.patch`, mark as `⚠️ AUTO-FIXED`
+- ❌ Non-Sensitive Mismatch → record `{ field, expected, actual }` and **auto-fix** via `gateway config.patch`, mark as `⚠️ AUTO-FIXED`.
+- ❌ Sensitive Mismatch (e.g., inside `auth_profiles`) → record only `[REDACTED_SENSITIVE_MISMATCH]` and DO NOT auto-fix. Mark as `❌ FAIL (Needs Human)`.
 
-## Phase 2: API Key & Provider Liveness
+## Phase 2: LLM Provider Liveness
 
-**Test LLM providers through OpenClaw's routing layer:**
+**Test LLM providers through OpenClaw's routing layer only — no API keys, no curl, no env vars.**
 
 For each LLM provider in your registered models, spawn a minimal session:
 ```yaml
@@ -50,20 +83,13 @@ sessions_spawn:
   runTimeoutSeconds: 30
 ```
 
-**Test non-LLM providers via env-injected curl:**
-
-For each non-LLM provider (Brave, Notion, X, etc.):
-```bash
-curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 -m 15 "<test-endpoint>"
-```
-
 Judgment:
-- Response received / HTTP 200 → ✅
-- Auth error (401/403) → ❌ KEY_INVALID
-- Rate limited (429) → ⚠️ RATE_LIMITED (not a key issue)
-- Timeout → ❌ UNREACHABLE
+- Received "KEY_OK" → ✅
+- Timeout or error → ❌ PROVIDER_DOWN (e.g., 401/403)
 
-**Do NOT auto-fix** — key issues need human intervention.
+**Do NOT auto-fix** — provider issues need human intervention.
+
+**Note:** Non-LLM provider checks (Brave, Notion, etc.) are intentionally excluded. API key validation requires functional testing (like this phase), never literal key comparison.
 
 ## Phase 3: Cron Integrity
 
@@ -119,7 +145,7 @@ sessions_spawn:
 
 ## Summary Report
 
-Send to your ops channel:
+Send to your ops channel. **Enforce the Redaction Protocol here.**
 
 ```
 🔍 **Post-Upgrade Verification Report**
@@ -127,10 +153,11 @@ Send to your ops channel:
 ⏱️ YYYY-MM-DD HH:MM TZ
 
 **Phase 1: Config Integrity** [✅/⚠️/❌] X/Y checks
-  [list any drift + fix status]
+  [list any non-sensitive drift + fix status]
+  [if sensitive drift found, list as: field (REDACTED_MISMATCH)]
 
 **Phase 2: Provider Liveness** [✅/❌] X/Y providers
-  [per-provider status]
+  [per-provider status: ✅ / ❌ ERROR_CODE]
 
 **Phase 3: Cron Integrity** [✅/⚠️/❌] X/Y recurring jobs
   [list any drift + fix status]
@@ -145,11 +172,13 @@ Send to your ops channel:
 
 If any ❌ FAIL → append: `🚨 Human intervention required`
 
-Also write results to `memory/YYYY-MM-DD.md`.
+Also write results to `memory/YYYY-MM-DD.md`. **No secrets allowed.**
 
 ## Rules
 
 - Each Phase is independent — one failure does not block the next
-- Auto-fix: Phase 1 (config) + Phase 3 (cron) only
-- Report-only: Phase 2 (keys) + Phase 5 (channels)
-- All curl commands use `--connect-timeout 10 -m 15`
+- Auto-fix: Phase 1 (non-sensitive config) + Phase 3 (cron) only
+- Report-only: Phase 2 (providers) + Phase 5 (channels)
+- **NO CREDENTIAL ACCESS**: No curl, no env vars, no literal key comparison.
+- Summary report goes to your configured ops channel (internal Discord only — do not route to external webhooks)
+- Memory write goes to `memory/YYYY-MM-DD.md` (local workspace only — contains version + phase pass/fail counts, no sensitive values)

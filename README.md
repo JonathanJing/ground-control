@@ -57,8 +57,8 @@ OpenClaw upgrades can silently change your configuration. A new version might re
 ### Phase 1: Config Integrity
 Compares `gateway config.get` output against GROUND_TRUTH. Checks primary model, registered models, compaction mode, context pruning, heartbeat interval, ACP config, and channel policies. **Auto-fixes drift** via `gateway config.patch`.
 
-### Phase 2: API Key & Provider Liveness
-Tests each LLM provider by spawning a minimal `sessions_spawn` request through OpenClaw's own routing layer — not by manually curling APIs. Non-LLM providers (Brave, Notion, etc.) are tested via env-injected curl. **Reports only** — key issues need human intervention.
+### Phase 2: LLM Provider Liveness
+Tests each LLM provider by spawning a minimal `sessions_spawn` request through OpenClaw's own routing layer. No API keys are read, no curl commands are executed, no env vars are accessed. **Reports only** — provider issues need human intervention.
 
 ### Phase 3: Cron Integrity
 Compares `cron list` against GROUND_TRUTH's recurring job definitions. Checks model, schedule, delivery target, and enabled status. **Auto-fixes drift** via `cron update`. Ignores one-shot (`deleteAfterRun`) jobs. Enforces the "no Opus in cron" rule.
@@ -144,6 +144,20 @@ ground-control/
     ├── post-upgrade-verify.md        # 5-phase verification agent prompt
     └── UPGRADE_SOP.md                # Upgrade standard operating procedure
 ```
+
+## Security Model
+
+### No Credential Access
+
+This skill does **not** read API keys, environment variables, or any secrets. Phase 2 tests LLM providers exclusively through OpenClaw's `sessions_spawn` — the routing layer handles authentication internally. Non-LLM provider checks (Brave, Notion, etc.) are intentionally out of scope.
+
+### Auto-fix Scope
+
+Phases 1 (config) and 3 (cron) can auto-patch your runtime. Controls:
+- `--dry-run` disables all auto-fix (report-only mode)
+- If >3 fields need fixing, the agent pauses for human confirmation
+- Every fix logs before/after values in the report
+- Phases 2 and 5 are **never** auto-fixed
 
 ## License
 
