@@ -1,7 +1,7 @@
 ---
 name: ground-control
 description: Post-upgrade verification system for OpenClaw. Defines a model/cron/channel ground truth file and a 5-phase automated verification flow (config integrity, API key liveness, cron integrity, session smoke test, channel liveness) with auto-repair for config and cron drift.
-version: "0.3.2"
+version: "0.3.3"
 metadata:
   author: JonathanJing
   tags: [ops, verification, upgrade, config, cron, health]

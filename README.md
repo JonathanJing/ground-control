@@ -2,6 +2,17 @@
 
 > Post-upgrade verification for OpenClaw. Your system's pre-flight checklist.
 
+## 🛠️ Installation
+
+### 1. Ask OpenClaw (Recommended)
+Tell OpenClaw: *"Install the ground-control skill."* The agent will handle the installation and configuration automatically.
+
+### 2. Manual Installation (CLI)
+If you prefer the terminal, run:
+```bash
+clawhub install ground-control
+```
+
 ## The Problem
 
 OpenClaw upgrades can silently change your configuration. A new version might reset your primary model, alter cron job schemas, or break channel routing. You won't notice until something stops working.
